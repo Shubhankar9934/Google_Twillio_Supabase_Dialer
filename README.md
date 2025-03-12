@@ -2,6 +2,13 @@
 
 A real-time call monitoring system that provides speech-to-text transcription, conversation analysis, and automated summarization.
 
+## Author
+- **Name:** Shubhankar Kumar
+- **Email:** shubhankarbittu9934@gmail.com
+- **Phone:** +918210558907
+
+This project was developed by Shubhankar Kumar. For any questions or inquiries, please feel free to contact using the information above.
+
 ## Features
 
 - Real-time call transcription using Google Speech-to-Text
