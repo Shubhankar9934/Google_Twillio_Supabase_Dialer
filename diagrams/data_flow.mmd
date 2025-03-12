@@ -1,0 +1,31 @@
+flowchart TB
+    subgraph Input["Input Processing"]
+        A[Phone Call Audio]
+        B[Audio Chunks]
+        C[Raw Transcripts]
+    end
+
+    subgraph Processing["Real-time Processing"]
+        D[Speech Recognition]
+        E[Text Processing]
+        F[Summary Generation]
+    end
+
+    subgraph Storage["Data Storage"]
+        G[Call Metadata]
+        H[Transcriptions]
+        I[Summaries]
+    end
+
+    A -->|Streaming| B
+    B -->|STT Service| C
+    C -->|Batch| D
+    D -->|Text| E
+    E -->|Content| F
+    
+    G -->|Reference| H
+    H -->|Analysis| I
+    
+    style Input fill:#f9d5e5,stroke:#333,stroke-width:2px
+    style Processing fill:#eeac99,stroke:#333,stroke-width:2px
+    style Storage fill:#e06377,stroke:#333,stroke-width:2px

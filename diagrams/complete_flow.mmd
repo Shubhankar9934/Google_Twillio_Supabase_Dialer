@@ -1,0 +1,75 @@
+flowchart TD
+    classDef userInterface fill:#f9f,stroke:#333,stroke-width:2px
+    classDef backend fill:#bbf,stroke:#333,stroke-width:2px
+    classDef external fill:#bfb,stroke:#333,stroke-width:2px
+    classDef process fill:#ffd,stroke:#333,stroke-width:2px
+    classDef storage fill:#ffe6cc,stroke:#333,stroke-width:2px
+
+    subgraph UI[Web Interface]
+        A[Web Browser] --> B[User Input]
+        B --> C[Call Controls]
+        C --> D[Real-time Display]
+    end
+
+    subgraph FastAPI[FastAPI Backend]
+        E[Routes Handler] --> F[WebSocket Manager]
+        F --> G[Call Controller]
+    end
+
+    subgraph CallSetup[Call Setup Process]
+        H[Validate Numbers] --> I[Initialize Call]
+        I --> J[Create Media Streams]
+    end
+
+    subgraph AudioProcessing[Audio Processing]
+        K[Twilio Media Stream] --> L[Audio Chunks]
+        L --> M[Google STT Service]
+        M --> N[Real-time Transcription]
+    end
+
+    subgraph DataHandling[Data Handling]
+        O[Transcript Buffer] --> P[OpenAI Processing]
+        P --> Q[Summary Generation]
+        Q --> R[Data Storage]
+    end
+
+    subgraph ExternalServices[External Services]
+        S[Twilio API]
+        T[Google Cloud]
+        U[OpenAI API]
+        V[Supabase DB]
+    end
+
+    %% Main Flow Connections
+    A --> E
+    E --> H
+    H --> S
+    S --> K
+    K --> M
+    M --> T
+    O --> U
+    R --> V
+
+    %% WebSocket Connections
+    F --> K
+    N --> D
+    Q --> D
+
+    %% Data Flow
+    M --> O
+    P --> Q
+    Q --> R
+
+    %% Styling
+    class A,B,C,D userInterface
+    class E,F,G backend
+    class H,I,J,K,L,M,N process
+    class O,P,Q,R storage
+    class S,T,U,V external
+
+    %% Annotations
+    A:::userInterface
+    E:::backend
+    S:::external
+    O:::storage
+    K:::process

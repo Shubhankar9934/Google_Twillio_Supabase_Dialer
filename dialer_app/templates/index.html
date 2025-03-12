@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>eClerx Enterprise Dialer</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+  <header class="app-header">
+    <div class="header-content">
+      <h1>eClerx Enterprise Dialer</h1>
+      <p class="header-subtitle">Intelligent Call Management System</p>
+    </div>
+  </header>
+  
+  <div class="container">
+    <div class="main-grid">
+      <!-- Left Column -->
+      <div class="dialer-form">
+        <div class="card-header">
+          <h2>Call Control Panel</h2>
+        </div>
+        <div class="status-indicator">
+          <div id="status" class="status-badge">Status: Disconnected</div>
+        </div>
+        
+        <form id="dialForm" action="/call" method="post">
+          <div class="form-group">
+            <label for="caller">Caller Number:</label>
+            <input type="text" id="caller" name="caller" placeholder="+10000000000" class="form-input">
+          </div>
+          <div class="form-group">
+            <label for="receiver">Receiver Number:</label>
+            <input type="text" id="receiver" name="receiver" placeholder="+10000000000" class="form-input">
+          </div>
+          <div class="button-group">
+            <button type="submit" class="btn btn-primary">Initiate Call</button>
+            <!-- Transcription toggle button; auto-enabled by default -->
+            <button type="button" id="transcribeBtn" class="btn" style="background-color: green; color: white;">Transcription Enabled</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Right Column -->
+      <div class="call-info">
+        <div class="card-header">
+          <h2>Active Call Information</h2>
+        </div>
+        <div class="info-content">
+          <div class="info-group">
+            <label>Call Status:</label>
+            <span id="callStatus">No active call</span>
+          </div>
+          <div class="info-group">
+            <label>Verified Caller:</label>
+            <span id="verifiedCaller">-</span>
+          </div>
+          <div class="info-group">
+            <label>Verified Receiver:</label>
+            <span id="verifiedReceiver">-</span>
+          </div>
+          <div class="info-group">
+            <label>Call SID:</label>
+            <span id="callSid">-</span>
+          </div>
+          <div class="info-group">
+            <label>Duration:</label>
+            <span id="callDuration">00:00:00</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Transcript Section (always visible) -->
+    <div id="transcript-container" class="transcript-section">
+      <div id="transcript-header" class="section-header">
+        <div class="header-left">
+          <span class="section-title">Real-time Transcript</span>
+          <span id="last-update" class="timestamp"></span>
+        </div>
+        <button id="downloadTranscript" class="btn btn-secondary" disabled>Download Transcript</button>
+      </div>
+      <div id="transcript">
+        <p class="waiting-msg">Waiting for speech to transcribe...</p>
+      </div>
+    </div>
+
+    <!-- Summary Section (always visible) -->
+    <div id="summary-container" class="transcript-section">
+      <div id="summary-header" class="section-header">
+        <div class="header-left">
+          <span class="section-title">Call Summary</span>
+        </div>
+        <button id="downloadSummary" class="btn btn-secondary">Download Summary</button>
+      </div>
+      <div id="summary">
+        <p class="waiting-msg">Summary will appear here once the call ends...</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // DOM Elements
+    const transcriptDiv = document.getElementById("transcript");
+    const summaryDiv = document.getElementById("summary");
+    const form = document.getElementById("dialForm");
+    const statusDiv = document.getElementById("status");
+    const lastUpdateSpan = document.getElementById("last-update");
+    const transcribeBtn = document.getElementById("transcribeBtn");
+    const downloadBtn = document.getElementById("downloadTranscript");
+    const downloadSummaryBtn = document.getElementById("downloadSummary");
+    const callStatusSpan = document.getElementById("callStatus");
+    const verifiedCallerSpan = document.getElementById("verifiedCaller");
+    const verifiedReceiverSpan = document.getElementById("verifiedReceiver");
+    const callSidSpan = document.getElementById("callSid");
+    const callDurationSpan = document.getElementById("callDuration");
+
+    let protocol = (window.location.protocol === 'https:') ? 'wss:' : 'ws:';
+    let wsUrl = protocol + '//' + window.location.host + '/ws';
+    let clientSocket = null;
+    let currentCallSid = null;
+    let transcriptReceived = false;
+    let callStartTime = null;
+    let durationInterval = null;
+    let transcriptMessages = [];
+    let transcriptionEnabled = true;
+
+    function showWaitingMessage() {
+      transcriptDiv.innerHTML = '<p class="waiting-msg">Waiting for speech to transcribe...</p>';
+      downloadBtn.disabled = true;
+    }
+
+    function formatDuration(seconds) {
+      const hrs = Math.floor(seconds / 3600);
+      const mins = Math.floor((seconds % 3600) / 60);
+      const secs = seconds % 60;
+      return `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    }
+
+    function startCallTimer() {
+      callStartTime = Date.now();
+      if (durationInterval) clearInterval(durationInterval);
+      durationInterval = setInterval(() => {
+        const duration = Math.floor((Date.now() - callStartTime) / 1000);
+        callDurationSpan.textContent = formatDuration(duration);
+      }, 1000);
+    }
+
+    function stopCallTimer() {
+      if (durationInterval) {
+        clearInterval(durationInterval);
+        durationInterval = null;
+      }
+      callDurationSpan.textContent = '00:00:00';
+    }
+
+    function updateCallInfo(caller, receiver, sid) {
+      verifiedCallerSpan.textContent = caller;
+      verifiedReceiverSpan.textContent = receiver;
+      callSidSpan.textContent = sid;
+      callStatusSpan.textContent = 'Call Active';
+      startCallTimer();
+      transcriptionEnabled = true;
+      transcribeBtn.disabled = false;
+      transcribeBtn.style.backgroundColor = "green";
+      transcribeBtn.innerText = "Transcription Enabled";
+      if (clientSocket && clientSocket.readyState === WebSocket.OPEN) {
+        clientSocket.send(JSON.stringify({ subscribe: sid }));
+      }
+    }
+
+    function resetCallInfo() {
+      verifiedCallerSpan.textContent = '-';
+      verifiedReceiverSpan.textContent = '-';
+      callSidSpan.textContent = '-';
+      callStatusSpan.textContent = 'Call Ended';
+      stopCallTimer();
+    }
+
+    function downloadTranscript() {
+      const content = transcriptMessages.join('\n');
+      const blob = new Blob([content], { type: 'text/plain' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `call-transcript-${currentCallSid}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    }
+
+    function downloadSummary() {
+      const content = summaryDiv.textContent;
+      const blob = new Blob([content], { type: 'text/plain' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `call-summary-${currentCallSid}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    }
+
+    downloadBtn.addEventListener('click', downloadTranscript);
+    downloadSummaryBtn.addEventListener('click', downloadSummary);
+
+    function connectWebSocket() {
+      clientSocket = new WebSocket(wsUrl);
+
+      function updateConnectionStatus(status, type) {
+        statusDiv.textContent = `Status: ${status}`;
+        statusDiv.style.color = type === 'success' ? 'green' : type === 'error' ? 'red' : '#FFA500';
+        callStatusSpan.textContent = status;
+      }
+
+      clientSocket.onopen = function() {
+        updateConnectionStatus('Connected', 'success');
+        console.log("WebSocket connected to /ws");
+        if (currentCallSid) {
+          clientSocket.send(JSON.stringify({ subscribe: currentCallSid }));
+        }
+      };
+
+      clientSocket.onclose = function() {
+        updateConnectionStatus('Disconnected - Retrying...', 'error');
+        console.log("WebSocket connection closed");
+        setTimeout(() => {
+          if (!clientSocket || clientSocket.readyState === WebSocket.CLOSED) {
+            connectWebSocket();
+          }
+        }, 3000);
+      };
+
+      clientSocket.onerror = function(error) {
+        console.error("WebSocket error:", error);
+        updateConnectionStatus('Connection Error', 'error');
+      };
+
+      clientSocket.onmessage = function(event) {
+        console.log('WebSocket message received:', event.data);
+        const timestamp = new Date().toLocaleTimeString();
+        console.log(`[${timestamp}] Processing message:`, event.data);
+        try {
+          let data = JSON.parse(event.data);
+          if (data.transcript) {
+            transcriptDiv.style.display = 'block'; // Ensure transcript div is visible
+            if (!transcriptReceived) {
+              transcriptDiv.innerHTML = '';
+              transcriptReceived = true;
+              downloadBtn.disabled = false;
+            }
+            let p = document.createElement("p");
+            let messageText = '';
+            if (data.track === "inbound") {
+              p.className = 'agent-message';
+              messageText = `Agent: ${data.transcript}`;
+            } else if (data.track === "outbound") {
+              p.className = 'user-message';
+              messageText = `Customer: ${data.transcript}`;
+            }
+            p.textContent = messageText;
+            console.log('Adding transcript message:', messageText);
+            transcriptMessages.push(messageText);
+            transcriptDiv.appendChild(p);
+            const updateTime = new Date().toLocaleTimeString();
+            lastUpdateSpan.textContent = `Last update: ${updateTime}`;
+            console.log(`Transcript updated at ${updateTime}`);
+            transcriptDiv.scrollTop = transcriptDiv.scrollHeight;
+            statusDiv.textContent = "Status: Transcribing";
+            statusDiv.style.color = "#008000";
+            callStatusSpan.textContent = "Call Active (Transcribing)";
+          }
+          else if (data.callEnded) {
+            let p = document.createElement("p");
+            p.className = 'system-message';
+            p.textContent = "Call ended.";
+            transcriptDiv.appendChild(p);
+            transcriptMessages.push("Call ended.");
+            resetCallInfo();
+            statusDiv.textContent = "Status: Call Ended";
+            statusDiv.style.color = "green";
+            summaryDiv.innerText = "Generating summary...";
+          }
+          else if (data.summary) {
+            summaryDiv.innerText = data.summary;
+          }
+          else if (data.error) {
+            console.error('Error from server:', data.error);
+            let p = document.createElement("p");
+            p.className = 'system-message';
+            p.textContent = `Error: ${data.error}`;
+            transcriptMessages.push(`System: ${data.error}`);
+            transcriptDiv.appendChild(p);
+            transcriptDiv.scrollTop = transcriptDiv.scrollHeight;
+          }
+        } catch (error) {
+          console.error('Error processing WebSocket message:', error);
+          statusDiv.textContent = "Status: Error processing message";
+          statusDiv.style.color = "red";
+          callStatusSpan.textContent = "Error";
+        }
+      };
+    }
+
+    connectWebSocket();
+
+    form.addEventListener("submit", async function(e) {
+      e.preventDefault();
+      let formData = new FormData(form);
+      let resp = await fetch("/call", {
+        method: "POST",
+        body: formData
+      });
+      let result = await resp.json();
+      console.log(result);
+      if (result.call_sid) {
+        currentCallSid = result.call_sid;
+        console.log('Call initiated with SID:', currentCallSid);
+        updateCallInfo(form.caller.value, form.receiver.value, result.call_sid);
+        showWaitingMessage();
+        transcriptMessages = [];
+        statusDiv.textContent = "Status: Call initiated, waiting for speech...";
+        statusDiv.style.color = "#FFA500";
+        callStatusSpan.textContent = "Call Initiated";
+      }
+    });
+
+    // Toggle transcription button to pause/resume transcription
+    transcribeBtn.addEventListener("click", async function() {
+      if (!currentCallSid) {
+        alert("No active call. Dial first!");
+        return;
+      }
+      try {
+        let resp = await fetch("/toggle_transcription", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({ call_sid: currentCallSid })
+        });
+        let result = await resp.json();
+        transcriptionEnabled = result.transcription_enabled;
+        if (transcriptionEnabled) {
+          transcribeBtn.style.backgroundColor = "green";
+          transcribeBtn.innerText = "Transcription Enabled";
+          statusDiv.textContent = "Status: Transcribing";
+          statusDiv.style.color = "#008000";
+        } else {
+          transcribeBtn.style.backgroundColor = "red";
+          transcribeBtn.innerText = "Transcription Disabled";
+          statusDiv.textContent = "Status: Transcription Paused";
+          statusDiv.style.color = "red";
+        }
+      } catch (error) {
+        console.error("Transcription toggle error:", error);
+        alert("Failed to toggle transcription: " + error.message);
+      }
+    });
+  </script>
+</body>
+</html>

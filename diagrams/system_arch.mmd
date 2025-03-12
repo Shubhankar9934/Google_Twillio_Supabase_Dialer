@@ -1,0 +1,36 @@
+graph TB
+    subgraph Frontend["Frontend Layer"]
+        UI[Web Interface]
+        WS[WebSocket Client]
+    end
+
+    subgraph Backend["Backend Layer"]
+        API[FastAPI Server]
+        WSM[WebSocket Manager]
+        TS[Twilio Service]
+        GSTS[Google STT Service]
+        SS[Summarization Service]
+        DBS[Database Service]
+    end
+
+    subgraph External["External Services"]
+        TWILIO[Twilio API]
+        GCP[Google Cloud STT]
+        OPENAI[OpenAI API]
+        SUPABASE[Supabase Database]
+    end
+
+    UI --> |HTTP Requests| API
+    WS --> |Real-time Updates| WSM
+    API --> |Call Control| TS
+    TS --> |Audio Stream| TWILIO
+    WSM --> |Audio Processing| GSTS
+    GSTS --> |Speech Recognition| GCP
+    WSM --> |Summary Request| SS
+    SS --> |Text Generation| OPENAI
+    WSM --> |Data Storage| DBS
+    DBS --> |Persistence| SUPABASE
+
+    style Frontend fill:#f9f,stroke:#333,stroke-width:2px
+    style Backend fill:#bbf,stroke:#333,stroke-width:2px
+    style External fill:#bfb,stroke:#333,stroke-width:2px

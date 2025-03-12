@@ -1,0 +1,37 @@
+sequenceDiagram
+    participant User as Web Browser
+    participant API as FastAPI Backend
+    participant TWS as Twilio Service
+    participant WSM as WebSocket Manager
+    participant GST as Google STT Service
+    participant OAI as OpenAI Service
+    participant DB as Supabase DB
+
+    User->>API: POST /call with phone numbers
+    API->>TWS: Initialize outbound call
+    TWS-->>API: Return call SID
+    TWS->>WSM: Establish WebSocket connection
+    
+    rect rgb(200, 220, 240)
+        Note right of WSM: Media Stream Setup
+        WSM->>GST: Create inbound stream
+        WSM->>GST: Create outbound stream
+        WSM->>DB: Initialize call record
+    end
+
+    rect rgb(220, 240, 220)
+        Note right of TWS: Active Call Phase
+        loop Audio Streaming
+            TWS->>WSM: Stream audio chunks
+            WSM->>GST: Process audio
+            GST-->>User: Real-time transcription
+        end
+    end
+
+    rect rgb(240, 220, 220)
+        Note right of WSM: Call Completion
+        TWS->>WSM: Call ended signal
+        WSM->>OAI: Generate call summary
+        WSM->>DB: Store call records
+        WSM-->>User: Send final summary
+    end

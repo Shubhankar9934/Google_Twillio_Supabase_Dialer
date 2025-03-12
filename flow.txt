@@ -1,0 +1,224 @@
+# Call Monitoring System Workflow Documentation
+
+## 1. Call Flow Diagram
+```mermaid
+sequenceDiagram
+    participant User as Web Browser
+    participant API as FastAPI Backend
+    participant TWS as Twilio Service
+    participant WSM as WebSocket Manager
+    participant GST as Google STT Service
+    participant OAI as OpenAI Service
+    participant DB as Supabase DB
+
+    User->>API: POST /call with phone numbers
+    API->>TWS: Initialize outbound call
+    TWS-->>API: Return call SID
+    TWS->>WSM: Establish WebSocket connection
+    
+    rect rgb(200, 220, 240)
+        Note right of WSM: Media Stream Setup
+        WSM->>GST: Create inbound stream
+        WSM->>GST: Create outbound stream
+        WSM->>DB: Initialize call record
+    end
+
+    rect rgb(220, 240, 220)
+        Note right of TWS: Active Call Phase
+        loop Audio Streaming
+            TWS->>WSM: Stream audio chunks
+            WSM->>GST: Process audio
+            GST-->>User: Real-time transcription
+        end
+    end
+
+    rect rgb(240, 220, 220)
+        Note right of WSM: Call Completion
+        TWS->>WSM: Call ended signal
+        WSM->>OAI: Generate call summary
+        WSM->>DB: Store call records
+        WSM-->>User: Send final summary
+    end
+```
+
+## 2. System Architecture
+```mermaid
+graph TB
+    subgraph Frontend["Frontend Layer"]
+        UI[Web Interface]
+        WS[WebSocket Client]
+    end
+
+    subgraph Backend["Backend Layer"]
+        API[FastAPI Server]
+        WSM[WebSocket Manager]
+        TS[Twilio Service]
+        GSTS[Google STT Service]
+        SS[Summarization Service]
+        DBS[Database Service]
+    end
+
+    subgraph External["External Services"]
+        TWILIO[Twilio API]
+        GCP[Google Cloud STT]
+        OPENAI[OpenAI API]
+        SUPABASE[Supabase Database]
+    end
+
+    UI --> |HTTP Requests| API
+    WS --> |Real-time Updates| WSM
+    API --> |Call Control| TS
+    TS --> |Audio Stream| TWILIO
+    WSM --> |Audio Processing| GSTS
+    GSTS --> |Speech Recognition| GCP
+    WSM --> |Summary Request| SS
+    SS --> |Text Generation| OPENAI
+    WSM --> |Data Storage| DBS
+    DBS --> |Persistence| SUPABASE
+
+    style Frontend fill:#f9f,stroke:#333,stroke-width:2px
+    style Backend fill:#bbf,stroke:#333,stroke-width:2px
+    style External fill:#bfb,stroke:#333,stroke-width:2px
+```
+
+## 3. Data Flow
+```mermaid
+flowchart TB
+    subgraph Input["Input Processing"]
+        A[Phone Call Audio]
+        B[Audio Chunks]
+        C[Raw Transcripts]
+    end
+
+    subgraph Processing["Real-time Processing"]
+        D[Speech Recognition]
+        E[Text Processing]
+        F[Summary Generation]
+    end
+
+    subgraph Storage["Data Storage"]
+        G[Call Metadata]
+        H[Transcriptions]
+        I[Summaries]
+    end
+
+    A -->|Streaming| B
+    B -->|STT Service| C
+    C -->|Batch| D
+    D -->|Text| E
+    E -->|Content| F
+    
+    G -->|Reference| H
+    H -->|Analysis| I
+    
+    style Input fill:#f9d5e5,stroke:#333,stroke-width:2px
+    style Processing fill:#eeac99,stroke:#333,stroke-width:2px
+    style Storage fill:#e06377,stroke:#333,stroke-width:2px
+```
+
+## 4. State Management
+```mermaid
+stateDiagram-v2
+    [*] --> CallInitiated: POST /call
+    
+    state CallSetup {
+        CallInitiated --> StreamsCreated: WebSocket Setup
+        StreamsCreated --> ConnectionEstablished: Twilio Connected
+    }
+    
+    state ActiveCall {
+        ConnectionEstablished --> TranscriptionEnabled: Start STT
+        TranscriptionEnabled --> AudioProcessing: Streaming
+        AudioProcessing --> TranscriptionEnabled: Continue
+    }
+    
+    state CallEnding {
+        AudioProcessing --> SummaryGeneration: Call End Signal
+        SummaryGeneration --> DataStorage: Store Records
+    }
+    
+    DataStorage --> [*]: Complete
+    
+    note right of CallSetup: "Initial Setup Phase"
+    note right of ActiveCall: "Main Processing Loop"
+    note right of CallEnding: "Cleanup Phase"
+```
+
+## Detailed Workflow Description
+
+1. Call Initiation Process:
+   - User submits call request through web interface
+   - Backend validates phone numbers
+   - Twilio service initiates outbound call
+   - WebSocket connections established for streaming
+
+2. Media Streaming Setup:
+   - Create inbound and outbound audio streams
+   - Initialize Google STT service instances
+   - Configure WebSocket manager for real-time data flow
+   - Set up database connection for logging
+
+3. Active Call Processing:
+   - Continuous audio streaming from Twilio
+   - Real-time speech-to-text conversion
+   - Live transcription updates to web client
+   - State management and monitoring
+
+4. Call Completion Workflow:
+   - Detect call end signal
+   - Generate call summary using OpenAI
+   - Store call records in Supabase
+   - Clean up resources and connections
+
+5. Error Handling and Recovery:
+   - Connection loss recovery
+   - Service failure handling
+   - Data consistency management
+   - Resource cleanup procedures
+
+## Service Interactions
+
+1. Twilio Service:
+   - Manages call lifecycle
+   - Handles media streaming
+   - Provides call status updates
+
+2. Google STT Service:
+   - Processes audio streams
+   - Generates real-time transcripts
+   - Manages recognition sessions
+
+3. WebSocket Manager:
+   - Coordinates real-time communication
+   - Routes audio and transcript data
+   - Manages client connections
+
+4. Summarization Service:
+   - Processes complete transcripts
+   - Generates call summaries
+   - Extracts key information
+
+5. Database Service:
+   - Stores call metadata
+   - Manages transcript records
+   - Handles data persistence
+
+## Configuration Requirements
+
+1. External Services:
+   - Twilio credentials
+   - Google Cloud API setup
+   - OpenAI API access
+   - Supabase database config
+
+2. Development Environment:
+   - Python environment setup
+   - Dependencies installation
+   - NGROK configuration
+   - Environment variables
+
+3. Production Deployment:
+   - Server configuration
+   - SSL/TLS setup
+   - Database initialization
+   - Service monitoring

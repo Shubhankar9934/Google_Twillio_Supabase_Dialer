@@ -1,0 +1,24 @@
+stateDiagram-v2
+    [*] --> CallInitiated: POST /call
+    
+    state CallSetup {
+        CallInitiated --> StreamsCreated: WebSocket Setup
+        StreamsCreated --> ConnectionEstablished: Twilio Connected
+    }
+    
+    state ActiveCall {
+        ConnectionEstablished --> TranscriptionEnabled: Start STT
+        TranscriptionEnabled --> AudioProcessing: Streaming
+        AudioProcessing --> TranscriptionEnabled: Continue
+    }
+    
+    state CallEnding {
+        AudioProcessing --> SummaryGeneration: Call End Signal
+        SummaryGeneration --> DataStorage: Store Records
+    }
+    
+    DataStorage --> [*]: Complete
+    
+    note right of CallSetup: "Initial Setup Phase"
+    note right of ActiveCall: "Main Processing Loop"
+    note right of CallEnding: "Cleanup Phase"
